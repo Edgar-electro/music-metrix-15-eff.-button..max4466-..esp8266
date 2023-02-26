@@ -1,0 +1,16 @@
+esp8266 music metrix 
+11 high 19 width
+15 effects 
+max4466 mic
+push button 
+auto mod 
+
+
+
+
+ 
+
+
+
+
+
