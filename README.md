@@ -6,3 +6,5 @@ esp8266 music metrix
 max4466 mic
 push button 
 auto mod 
+compiling board NODEMCU V1
+CORE 2,74
