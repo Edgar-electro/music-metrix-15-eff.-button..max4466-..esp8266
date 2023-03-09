@@ -1,16 +1,14 @@
-// (Heavily) adapted from https://github.com/G6EJD/ESP32-8266-Audio-Spectrum-Display/blob/master/ESP32_Spectrum_Display_02.ino
-// Adjusted to allow brightness changes on press+hold, Auto-cycle for 3 button presses within 2 seconds
-// Edited to add Neomatrix support for easier compatibility with different layouts.
+
 
 #include <FastLED_NeoMatrix.h>
 #include <arduinoFFT.h>
 #include <EasyButton.h>
 
-#define SAMPLES         256         // Must be a power of 2
-#define SAMPLING_FREQ   40000         // Hz, must be 40000 or less due to ADC conversion time. Determines maximum frequency that can be analysed by the FFT Fmax=sampleF/2.
-#define AMPLITUDE       160          //inchqn tivy cacr enqan ujexa vneshni signaly audio... Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
+#define SAMPLES         128        // Must be a power of 2
+#define SAMPLING_FREQ   40000        // Hz, must be 40000 or less due to ADC conversion time. Determines maximum frequency that can be analysed by the FFT Fmax=sampleF/2.
+#define AMPLITUDE       50         //inchqn tivy cacr enqan ujexa vneshni signaly audio... Depending on your audio source level, you may need to alter this value. Can be used as a 'sensitivity' control.
 #define AUDIO_IN_PIN    A0            // Signal in on this pin
-#define LED_PIN         2             // D2 LED strip data
+#define LED_PIN         3             // D3 LED strip data
 #define BTN_PIN         5            // GPIO  5  Connect a push button to this pin to change patterns
 #define LONG_PRESS_MS   400           // Number of ms to count as a long press
 #define COLOR_ORDER     GRB           // If colours look wrong, play with this
@@ -23,17 +21,17 @@
 #define BAR_WIDTH      (kMatrixWidth  / (NUM_BANDS - 1))  // If width >= 8 light 1 LED width per bar, >= 16 light 2 LEDs width bar etc
 #define TOP            (kMatrixHeight - 0)                // Don't allow the bars to go offscreen
 #define SERPENTINE     true                               // Set to false if you're LEDS are connected end to end, true if serpentine
-#define Decay_peak     40
+#define Decay_peak_time     40
 #define ChangePatter_time   10
-const int BRIGHTNESS_SETTINGS[3] = {10, 70, 200};  // 3 Integer array for 3 brightness settings (based on pressing+holding BTN_PIN)
+const int BRIGHTNESS_SETTINGS[3] = {10, 70, 255};  // 3 Integer array for 3 brightness settings (based on pressing+holding BTN_PIN)
 const uint8_t kMatrixWidth = 19;                          // Matrix width
 const uint8_t kMatrixHeight = 11;                         // Matrix height
 
 // Sampling and FFT stuff
 unsigned int sampling_period_us;
-byte peak[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};              // The length of these arrays must be >= NUM_BANDS
-int oldBarHeights[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-int bandValues[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+byte peak[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};              // The length of these arrays must be >= NUM_BANDS
+int oldBarHeights[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+int bandValues[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 double vReal[SAMPLES];
 double vImag[SAMPLES];
 unsigned long newTime;
@@ -103,7 +101,7 @@ CRGBPalette16 purplePal = purple_gp;
 DEFINE_GRADIENT_PALETTE( redyellow_gp ) {  
   0,   200, 200,  200,   //white
  64,   255, 218,    0,   //yellow
-128,   231,   0,    0,   //red
+128,   255,   0,    0,   //red
 192,   255, 218,    0,   //yellow
 255,   200, 200,  200 }; //white
 CRGBPalette16 heatPal = redyellow_gp;
@@ -181,6 +179,7 @@ void startAutoMode() {
 }
 
 void brightnessButton() {
+  Serial.println("BRIGHTNESS SETTINGS");
   if (FastLED.getBrightness() == BRIGHTNESS_SETTINGS[2])  FastLED.setBrightness(BRIGHTNESS_SETTINGS[0]);
   else if (FastLED.getBrightness() == BRIGHTNESS_SETTINGS[0]) FastLED.setBrightness(BRIGHTNESS_SETTINGS[1]);
   else if (FastLED.getBrightness() == BRIGHTNESS_SETTINGS[1]) FastLED.setBrightness(BRIGHTNESS_SETTINGS[2]);
@@ -221,39 +220,13 @@ void loop() {
   for (int i = 2; i < (SAMPLES/2); i++){       // Don't use sample 0 and only first SAMPLES/2 are usable. Each array element represents a frequency bin and its value the amplitude.
     if (vReal[i] > NOISE) {                    // Add a crude noise filter
 
-   /*// 8 bands, 12kHz top band
-      if (i<=3 )           bandValues[0]  += (int)vReal[i];
-      if (i>3   && i<=6  ) bandValues[1]  += (int)vReal[i];
-      if (i>6   && i<=13 ) bandValues[2]  += (int)vReal[i];
-      if (i>13  && i<=27 ) bandValues[3]  += (int)vReal[i];
-      if (i>27  && i<=55 ) bandValues[4]  += (int)vReal[i];
-      if (i>55  && i<=112) bandValues[5]  += (int)vReal[i];
-      if (i>112 && i<=229) bandValues[6]  += (int)vReal[i];
-      if (i>229          ) bandValues[7]  += (int)vReal[i]; */
-      
-      /*    //16 bands, sample 256  ...sample freq 10000.. 5000hz  yntir vijaka
-      if (i<=2           )  bandValues[0]  += (int)vReal[i];
-      if (i>2   && i<=3  ) bandValues[1]  += (int)vReal[i];
-      if (i>3   && i<=4  ) bandValues[2]  += (int)vReal[i];
-      if (i>4   && i<=5  ) bandValues[3]  += (int)vReal[i];
-      if (i>5  && i<=7  ) bandValues[4]  += (int)vReal[i];
-      if (i>7   && i<=9 ) bandValues[5]  += (int)vReal[i];
-      if (i>9  && i<=12 ) bandValues[6]  += (int)vReal[i];
-      if (i>12  && i<=16 ) bandValues[7]  += (int)vReal[i];
-      if (i>16  && i<=22 ) bandValues[8]  += (int)vReal[i];
-      if (i>22  && i<=28 ) bandValues[9]  += (int)vReal[i];
-      if (i>28  && i<=37 ) bandValues[10] += (int)vReal[i];
-      if (i>37  && i<=49 ) bandValues[11] += (int)vReal[i];
-      if (i>49  && i<=65) bandValues[12] += (int)vReal[i];
-      if (i>65 && i<=85) bandValues[13] += (int)vReal[i];
-      if (i>85 && i<=113) bandValues[14] += (int)vReal[i];
-      if (i>113 ) bandValues[15] += (int)vReal[i];         */  
+  
       
       
      
      
      
-      // sample freq 17000   samples 128  8500hz
+   /*   // sample freq 40000   samples 256  6000hz
       if (i>1   && i<=2  )  bandValues[0]  += (int)vReal[i];
       if (i>2   && i<=4  )  bandValues[1]  += (int)vReal[i];
       if (i>4   && i<=6  )  bandValues[2]  += (int)vReal[i];
@@ -273,29 +246,31 @@ void loop() {
       if (i>81  && i<=90 )  bandValues[16] += (int)vReal[i]; 
       if (i>90  && i<=110 )  bandValues[17] += (int)vReal[i]; 
       if (i>110          )  bandValues[18] += (int)vReal[i]; 
+                                                             */
       
    
    
+      if (i>1   && i<=2  )  bandValues[0]  += (int)vReal[i];
+      if (i>2   && i<=3  )  bandValues[1]  += (int)vReal[i];
+      if (i>3   && i<=4  )  bandValues[2]  += (int)vReal[i];
+      if (i>4   && i<=6  )  bandValues[3]  += (int)vReal[i];
+      if (i>6   && i<=8  )  bandValues[4]  += (int)vReal[i];
+      if (i>8   && i<=10 )  bandValues[5]  += (int)vReal[i];
+      if (i>10  && i<=12 )  bandValues[6]  += (int)vReal[i];
+      if (i>12  && i<=14 )  bandValues[7]  += (int)vReal[i];
+      if (i>14  && i<=16 )  bandValues[8]  += (int)vReal[i];
+      if (i>16  && i<=18 )  bandValues[9]  += (int)vReal[i];
+      if (i>18  && i<=20 )  bandValues[10] += (int)vReal[i];
+      if (i>20  && i<=23 )  bandValues[11] += (int)vReal[i];
+      if (i>23  && i<=26 )  bandValues[12] += (int)vReal[i];
+      if (i>26  && i<=30 )  bandValues[13] += (int)vReal[i];
+      if (i>30  && i<=36 )  bandValues[14] += (int)vReal[i];
+      if (i>36  && i<=43 )  bandValues[15] += (int)vReal[i]; 
+      if (i>43  && i<=50 )  bandValues[16] += (int)vReal[i]; 
+      if (i>50  && i<=60 ) bandValues[17] += (int)vReal[i]; 
+      if (i>60          )  bandValues[18] += (int)vReal[i]; 
    
-   
-   /*    //16 bands, 12kHz top band  yntir vijaka  25000 sample 512 bit
-      if (i<=2 )           bandValues[0]  += (int)vReal[i];
-      if (i>2   && i<=3  ) bandValues[1]  += (int)vReal[i];
-      if (i>3   && i<=4  ) bandValues[2]  += (int)vReal[i];
-      if (i>4   && i<=5  ) bandValues[3]  += (int)vReal[i];
-      if (i>5   && i<=7  ) bandValues[4]  += (int)vReal[i];
-      if (i>7   && i<=10 ) bandValues[5]  += (int)vReal[i];
-      if (i>10  && i<=15 ) bandValues[6]  += (int)vReal[i];
-      if (i>15  && i<=20 ) bandValues[7]  += (int)vReal[i];
-      if (i>20  && i<=28 ) bandValues[8]  += (int)vReal[i];
-      if (i>28  && i<=40 ) bandValues[9]  += (int)vReal[i];
-      if (i>40  && i<=55 ) bandValues[10] += (int)vReal[i];
-      if (i>55  && i<=77 ) bandValues[11] += (int)vReal[i];
-      if (i>77  && i<=108) bandValues[12] += (int)vReal[i];
-      if (i>108 && i<=151) bandValues[13] += (int)vReal[i];
-      if (i>151 && i<=211) bandValues[14] += (int)vReal[i];
-      if (i>211 && i<=294) bandValues[15] += (int)vReal[i];
-      if (i>294 ) bandValues[16] += (int)vReal[i];*/
+  
       
 
       
@@ -417,7 +392,7 @@ void loop() {
   }
 
   // Decay peak
-  EVERY_N_MILLISECONDS(Decay_peak) {
+  EVERY_N_MILLISECONDS(Decay_peak_time) {
     for (byte band = 0; band < NUM_BANDS; band++)
       if (peak[band] > 0) peak[band] -= 1;
     colorTimer++;
